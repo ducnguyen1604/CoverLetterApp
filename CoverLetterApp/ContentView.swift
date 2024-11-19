@@ -16,90 +16,158 @@ struct ContentView: View {
     @State private var coverLetter: String = "Your generated cover letter will appear here."
     @State private var isFilePickerPresented: Bool = false
     @State private var filePreview: AnyView? = nil // Store the file preview
+    @State private var showCopyConfirmation: Bool = false // State to show confirmation alert after copying
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                // Intro Text
-                Text("Put your CV and job description here to generate a cover letter.")
-                    .font(.body) // Normal font
-                    .multilineTextAlignment(.center) // Center-aligned text
+            ScrollView { // Enable scrolling for the whole page
+                VStack(spacing: 20) {
+                    // Intro Text
+                    Text("Put your CV and job description here to generate a cover letter.")
+                        .font(.body) // Normal font
+                        .multilineTextAlignment(.center) // Center-aligned text
+                        .lineLimit(nil) // Allow unlimited lines
+                        .fixedSize(horizontal: false, vertical: true) // Prevent truncation
+                        .padding()
+
+                    // CV Upload Button and Preview
+                    Button(action: {
+                        isFilePickerPresented.toggle()
+                    }) {
+                        Text("Upload CV")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
                     .padding()
 
-                // CV Upload Button and Preview
-                Button(action: {
-                    isFilePickerPresented.toggle()
-                }) {
-                    Text("Upload CV")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                .padding()
+                    // CV Preview
+                    if let preview = filePreview {
+                        preview
+                            .frame(maxHeight: UIScreen.main.bounds.height * 0.6) // Take 60% of the screen height
+                            .cornerRadius(10)
+                            .padding()
+                    } else {
+                        Text("No preview available.")
+                            .frame(maxHeight: UIScreen.main.bounds.height * 0.6)
+                            .padding()
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(10)
+                    }
 
-                // CV Preview
-                if let preview = filePreview {
-                    preview
-                        .frame(maxHeight: UIScreen.main.bounds.height * 0.6) // Take 60% of the screen height
-                        .cornerRadius(10)
+                    // Job Description Input
+                    TextField("Enter the job description", text: $jobDescription, axis: .vertical)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
                         .padding()
-                } else {
-                    Text("No preview available.")
-                        .frame(maxHeight: UIScreen.main.bounds.height * 0.6)
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
+                        .frame(height: 100) // Default height for 5 lines
+                        .lineLimit(5) // Allow up to 5 visible lines by default
                         .cornerRadius(10)
-                }
 
-                // Job Description Input
-                TextField("Enter the job description", text: $jobDescription, axis: .vertical)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    // Generate Button
+                    Button(action: generateCoverLetter) {
+                        Text("Generate Cover Letter")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
                     .padding()
-                    .frame(maxHeight: 150)
-                    .lineLimit(5)
 
-                // Generate Button
-                Button(action: generateCoverLetter) {
-                    Text("Generate Cover Letter")
-                        .font(.headline)
+                    // Cover Letter Output and Copy Button
+                    ScrollView {
+                        Text(coverLetter)
+                            .padding()
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(10)
+                            .frame(height: 140) // Default height for 7 lines
+                            .lineLimit(7) // Allow up to 7 visible lines by default
+                    }
+
+                    // Copy Button
+                    Button(action: copyCoverLetter) {
+                        HStack {
+                            Image(systemName: "doc.on.doc")
+                            Text("Copy Cover Letter")
+                                .font(.headline)
+                        }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(Color.orange)
                         .foregroundColor(.white)
                         .cornerRadius(10)
+                    }
+                    .padding()
+                    .alert(isPresented: $showCopyConfirmation) {
+                        Alert(
+                            title: Text("Copied"),
+                            message: Text("Cover letter copied to clipboard."),
+                            dismissButton: .default(Text("OK"))
+                        )
+                    }
+
+                    Spacer()
                 }
+                .ignoresSafeArea(.keyboard, edges: .bottom)
                 .padding()
-
-                // Cover Letter Output
-                ScrollView {
-                    Text(coverLetter)
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(10)
+                .navigationTitle("Cover Letter Generator")
+                .fileImporter(
+                    isPresented: $isFilePickerPresented,
+                    allowedContentTypes: [.pdf, .image], // Accept PDFs and images
+                    allowsMultipleSelection: false
+                ) { result in
+                    handleFileImport(result: result)
                 }
-                .frame(maxHeight: 200)
-
-                Spacer()
-            }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .padding()
-            .navigationTitle("Cover Letter Generator")
-            .fileImporter(
-                isPresented: $isFilePickerPresented,
-                allowedContentTypes: [.pdf, .image], // Accept PDFs and images
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result: result)
             }
         }
     }
 
-    // Generate Cover Letter (Placeholder)
+
+    // Copy Cover Letter to Clipboard
+    private func copyCoverLetter() {
+        UIPasteboard.general.string = coverLetter // Copy the generated cover letter to the clipboard
+        showCopyConfirmation = true // Show confirmation alert
+    }
+
+    // Generate Cover Letter
     func generateCoverLetter() {
-        coverLetter = "This is a mock cover letter based on your CV and job description."
+        guard let url = URL(string: "http://192.168.0.103:5001/generate-cover-letter") else { return } // Update your backend URL here
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "cv_text": extractedText,
+            "job_description": jobDescription
+        ]
+
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error: \(error)")
+                DispatchQueue.main.async {
+                    coverLetter = "Failed to generate cover letter: \(error.localizedDescription)"
+                }
+                return
+            }
+
+            if let data = data {
+                if let decodedResponse = try? JSONDecoder().decode([String: String].self, from: data) {
+                    DispatchQueue.main.async {
+                        coverLetter = decodedResponse["cover_letter"] ?? "Error: Unable to fetch the cover letter."
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        coverLetter = "Error: Failed to decode server response."
+                    }
+                }
+            }
+        }.resume()
     }
 
     // Handle File Import
@@ -212,3 +280,4 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
+
