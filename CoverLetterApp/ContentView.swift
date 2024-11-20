@@ -80,13 +80,19 @@ struct ContentView: View {
 
                     // Cover Letter Output and Copy Button
                     ScrollView {
-                        Text(coverLetter)
-                            .padding()
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(10)
-                            .frame(height: 140) // Default height for 7 lines
-                            .lineLimit(7) // Allow up to 7 visible lines by default
+                        ScrollView(.vertical) { // Enable vertical scrolling inside the output box
+                            Text(coverLetter)
+                                .font(.title2) // Larger font for readability
+                                .padding()
+                                .background(Color.gray.opacity(0.2))
+                                .cornerRadius(10)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(nil) // Allow unlimited lines
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: UIScreen.main.bounds.height * 0.6) // Restrict to 60% of screen height
                     }
+                    .padding()
+
 
                     // Copy Button
                     Button(action: copyCoverLetter) {
